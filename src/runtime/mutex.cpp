@@ -14,16 +14,16 @@ namespace lean {
 
 static lean_external_class * g_basemutex_external_class = nullptr;
 static void basemutex_finalizer(void * h) {
-    delete static_cast<mutex *>(h);
+    delete static_cast<recursive_mutex *>(h);
 }
 static void basemutex_foreach(void *, b_obj_arg) {}
 
-static mutex * basemutex_get(lean_object * mtx) {
-    return static_cast<mutex *>(lean_get_external_data(mtx));
+static recursive_mutex * basemutex_get(lean_object * mtx) {
+    return static_cast<recursive_mutex *>(lean_get_external_data(mtx));
 }
 
 extern "C" LEAN_EXPORT obj_res lean_io_basemutex_new(obj_arg) {
-    return io_result_mk_ok(lean_alloc_external(g_basemutex_external_class, new mutex));
+    return io_result_mk_ok(lean_alloc_external(g_basemutex_external_class, new recursive_mutex));
 }
 
 extern "C" LEAN_EXPORT obj_res lean_io_basemutex_lock(b_obj_arg mtx, obj_arg) {
@@ -38,20 +38,20 @@ extern "C" LEAN_EXPORT obj_res lean_io_basemutex_unlock(b_obj_arg mtx, obj_arg) 
 
 static lean_external_class * g_condvar_external_class = nullptr;
 static void condvar_finalizer(void * h) {
-    delete static_cast<condition_variable *>(h);
+    delete static_cast<condition_variable_any *>(h);
 }
 static void condvar_foreach(void *, b_obj_arg) {}
 
-static condition_variable * condvar_get(lean_object * mtx) {
-    return static_cast<condition_variable *>(lean_get_external_data(mtx));
+static condition_variable_any * condvar_get(lean_object * mtx) {
+    return static_cast<condition_variable_any *>(lean_get_external_data(mtx));
 }
 
 extern "C" LEAN_EXPORT obj_res lean_io_condvar_new(obj_arg) {
-    return io_result_mk_ok(lean_alloc_external(g_condvar_external_class, new condition_variable));
+    return io_result_mk_ok(lean_alloc_external(g_condvar_external_class, new condition_variable_any));
 }
 
 extern "C" LEAN_EXPORT obj_res lean_io_condvar_wait(b_obj_arg condvar, b_obj_arg mtx, obj_arg) {
-    unique_lock<mutex> lock(*basemutex_get(mtx), std::adopt_lock_t());
+    unique_lock<recursive_mutex> lock(*basemutex_get(mtx), std::adopt_lock_t());
     condvar_get(condvar)->wait(lock);
     lock.release();
     return io_result_mk_ok(box(0));

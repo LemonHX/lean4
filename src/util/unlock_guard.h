@@ -17,7 +17,7 @@ namespace lean {
    Example:
    <code>
       {
-         lock_guard<mutex> lock(m);
+         lock_guard<recursive_mutex> lock(m);
          ...
          {
              unlock_guard unlock(m);
@@ -30,9 +30,9 @@ namespace lean {
    \warning The calling thread must own the lock to m_mutex
 */
 class unlock_guard {
-    mutex & m_mutex;
+    recursive_mutex & m_mutex;
 public:
-    explicit unlock_guard(mutex & m):m_mutex(m) { m_mutex.unlock(); }
+    explicit unlock_guard(recursive_mutex & m):m_mutex(m) { m_mutex.unlock(); }
     unlock_guard(unlock_guard const &) = delete;
     unlock_guard(unlock_guard &&) = delete;
     unlock_guard & operator=(unlock_guard const &) = delete;

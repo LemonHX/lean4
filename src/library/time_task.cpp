@@ -12,11 +12,11 @@ Author: Sebastian Ullrich
 namespace lean {
 
 static std::map<std::string, second_duration> * g_cum_times;
-static mutex * g_cum_times_mutex;
+static recursive_mutex * g_cum_times_mutex;
 LEAN_THREAD_PTR(time_task, g_current_time_task);
 
 void report_profiling_time(std::string const & category, second_duration time) {
-    lock_guard<mutex> _(*g_cum_times_mutex);
+    lock_guard<recursive_mutex> _(*g_cum_times_mutex);
     (*g_cum_times)[category] += time;
 }
 
@@ -32,7 +32,7 @@ void display_cumulative_profiling_times(std::ostream & out) {
 }
 
 void initialize_time_task() {
-    g_cum_times_mutex = new mutex;
+    g_cum_times_mutex = new recursive_mutex;
     g_cum_times = new std::map<std::string, second_duration>;
 }
 

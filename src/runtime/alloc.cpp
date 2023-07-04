@@ -120,7 +120,7 @@ struct heap {
     /* Objects that must be sent to other heaps. */
     void *    m_to_export_list{nullptr};
     unsigned  m_to_export_list_size{0};
-    mutex     m_mutex; /* for the following fields */
+    recursive_mutex     m_mutex; /* for the following fields */
     /* The following list contains object by this heap that were deallocated
        by other heaps. */
     void *    m_to_import_list{nullptr};
@@ -132,19 +132,19 @@ struct heap {
 
 struct heap_manager {
     /* The mutex protects the list of orphan segments. */
-    mutex             m_mutex;
+    recursive_mutex             m_mutex;
     heap *            m_orphans{nullptr};
 
     void push_orphan(heap * h) {
         /* TODO(Leo): avoid mutex */
-        lock_guard<mutex> lock(m_mutex);
+        lock_guard<recursive_mutex> lock(m_mutex);
         h->m_next_orphan = m_orphans;
         m_orphans = h;
     }
 
     heap * pop_orphan() {
         /* TODO(Leo): avoid mutex */
-        lock_guard<mutex> lock(m_mutex);
+        lock_guard<recursive_mutex> lock(m_mutex);
         if (m_orphans) {
             heap * h = m_orphans;
             m_orphans = h->m_next_orphan;
@@ -221,7 +221,7 @@ void page::push_free_obj(void * o) {
 void heap::import_objs() {
     void * to_import = nullptr;
     {   // TODO(Leo): avoid mutex using compare and swap
-        lock_guard<mutex> lock(m_mutex);
+        lock_guard<recursive_mutex> lock(m_mutex);
         to_import = m_to_import_list;
         m_to_import_list = nullptr;
     }
@@ -263,7 +263,7 @@ void heap::export_objs() {
     m_to_export_list      = nullptr;
     m_to_export_list_size = 0;
     for (export_entry const & e : to_export) {
-        unique_lock<mutex> lock(e.m_heap->m_mutex);
+        unique_lock<recursive_mutex> lock(e.m_heap->m_mutex);
         set_next_obj(e.m_tail, e.m_heap->m_to_import_list);
         e.m_heap->m_to_import_list = e.m_head;
     }

@@ -33,7 +33,7 @@ using std::atomic_bool;
 using std::atomic_ushort;
 using std::atomic_uint;
 using std::atomic_uchar;
-using std::condition_variable;
+using std::condition_variable_any;
 using std::lock_guard;
 using std::unique_lock;
 using std::atomic_load;
@@ -151,7 +151,7 @@ public:
     void lock() {}
     void unlock() {}
 };
-class condition_variable {
+class condition_variable_any {
 public:
     template<typename Lock> void wait(Lock const &) {}
     template<typename Lock, typename F> void wait(Lock const &, F) {}

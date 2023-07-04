@@ -16,7 +16,7 @@ single_timer::single_timer():
 
 single_timer::~single_timer() {
     {
-        unique_lock<mutex> lock(m_mutex);
+        unique_lock<recursive_mutex> lock(m_mutex);
         m_shutting_down = true;
         m_timer_changed.notify_one();
     }
@@ -24,7 +24,7 @@ single_timer::~single_timer() {
 }
 
 void single_timer::worker() {
-    unique_lock<mutex> lock(m_mutex);
+    unique_lock<recursive_mutex> lock(m_mutex);
     while (!m_shutting_down) {
         auto now = chrono::steady_clock::now();
         if (m_time && *m_time <= now + accuracy) {
@@ -43,7 +43,7 @@ void single_timer::worker() {
 }
 
 void single_timer::set(chrono::steady_clock::time_point const & time, callback const & cb, bool overwrite) {
-    unique_lock<mutex> lock(m_mutex);
+    unique_lock<recursive_mutex> lock(m_mutex);
     if (overwrite || !m_time) {
         m_time = optional<chrono::steady_clock::time_point>(time);
         m_cb = cb;
@@ -52,7 +52,7 @@ void single_timer::set(chrono::steady_clock::time_point const & time, callback c
 }
 
 void single_timer::reset() {
-    unique_lock<mutex> lock(m_mutex);
+    unique_lock<recursive_mutex> lock(m_mutex);
     m_time = optional<chrono::steady_clock::time_point>();
     m_cb = nullptr;
     m_timer_changed.notify_one();

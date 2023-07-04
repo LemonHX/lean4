@@ -578,7 +578,7 @@ struct scoped_current_task_object : flet<lean_task_object *> {
 };
 
 class task_manager {
-    mutex                                         m_mutex;
+    recursive_mutex                                         m_mutex;
     unsigned                                      m_num_std_workers{0};
     unsigned                                      m_idle_std_workers{0};
     unsigned                                      m_max_std_workers{0};
@@ -586,9 +586,9 @@ class task_manager {
     std::deque<lean_task_object *>                m_queues[LEAN_MAX_PRIO+1];
     unsigned                                      m_queues_size{0};
     unsigned                                      m_max_prio{0};
-    condition_variable                            m_queue_cv;
-    condition_variable                            m_task_finished_cv;
-    condition_variable                            m_worker_finished_cv;
+    condition_variable_any                            m_queue_cv;
+    condition_variable_any                            m_task_finished_cv;
+    condition_variable_any                            m_worker_finished_cv;
     bool                                          m_shutting_down{false};
 
     lean_task_object * dequeue() {
@@ -625,7 +625,7 @@ class task_manager {
             m_queue_cv.notify_one();
     }
 
-    void deactivate_task_core(unique_lock<mutex> & lock, lean_task_object * t) {
+    void deactivate_task_core(unique_lock<recursive_mutex> & lock, lean_task_object * t) {
         object * c              = t->m_imp->m_closure;
         lean_task_object * it   = t->m_imp->m_head_dep;
         t->m_imp->m_closure     = nullptr;
@@ -647,7 +647,7 @@ class task_manager {
         m_num_std_workers++;
         lthread([this]() {
             save_stack_info(false);
-            unique_lock<mutex> lock(m_mutex);
+            unique_lock<recursive_mutex> lock(m_mutex);
             m_idle_std_workers++;
             while (true) {
                 if (m_queues_size == 0) {
@@ -675,7 +675,7 @@ class task_manager {
         m_num_dedicated_workers++;
         lthread([this, t]() {
             save_stack_info(false);
-            unique_lock<mutex> lock(m_mutex);
+            unique_lock<recursive_mutex> lock(m_mutex);
             run_task(lock, t);
             m_num_dedicated_workers--;
             m_worker_finished_cv.notify_all();
@@ -683,7 +683,7 @@ class task_manager {
         // see above
     }
 
-    void run_task(unique_lock<mutex> & lock, lean_task_object * t) {
+    void run_task(unique_lock<recursive_mutex> & lock, lean_task_object * t) {
         lean_assert(t->m_imp);
         if (t->m_imp->m_deleted) {
             free_task(t);
@@ -765,7 +765,7 @@ public:
     }
 
     ~task_manager() {
-        unique_lock<mutex> lock(m_mutex);
+        unique_lock<recursive_mutex> lock(m_mutex);
         m_shutting_down = true;
         m_queue_cv.notify_all();
         // wait for all workers to finish
@@ -773,12 +773,12 @@ public:
     }
 
     void enqueue(lean_task_object * t) {
-        unique_lock<mutex> lock(m_mutex);
+        unique_lock<recursive_mutex> lock(m_mutex);
         enqueue_core(t);
     }
 
     void resolve(lean_task_object * t, object * v) {
-        unique_lock<mutex> lock(m_mutex);
+        unique_lock<recursive_mutex> lock(m_mutex);
         if (t->m_value) {
             dec(v);
             return;
@@ -792,7 +792,7 @@ public:
             enqueue(t2);
             return;
         }
-        unique_lock<mutex> lock(m_mutex);
+        unique_lock<recursive_mutex> lock(m_mutex);
         lean_assert(t2->m_value == nullptr);
         if (t1->m_value) {
             enqueue_core(t2);
@@ -805,7 +805,7 @@ public:
     void wait_for(lean_task_object * t) {
         if (t->m_value)
             return;
-        unique_lock<mutex> lock(m_mutex);
+        unique_lock<recursive_mutex> lock(m_mutex);
         if (t->m_value)
             return;
         m_task_finished_cv.wait(lock, [&]() { return t->m_value != nullptr; });
@@ -814,7 +814,7 @@ public:
     object * wait_any(object * task_list) {
         if (object * t = wait_any_check(task_list))
             return t;
-        unique_lock<mutex> lock(m_mutex);
+        unique_lock<recursive_mutex> lock(m_mutex);
         while (true) {
             if (object * t = wait_any_check(task_list))
                 return t;
@@ -823,7 +823,7 @@ public:
     }
 
     void deactivate_task(lean_task_object * t) {
-        unique_lock<mutex> lock(m_mutex);
+        unique_lock<recursive_mutex> lock(m_mutex);
         if (object * v = t->m_value) {
             lean_assert(t->m_imp == nullptr);
             lock.unlock();
@@ -837,7 +837,7 @@ public:
     }
 
     void cancel(lean_task_object * t) {
-        unique_lock<mutex> lock(m_mutex);
+        unique_lock<recursive_mutex> lock(m_mutex);
         if (t->m_imp)
             t->m_imp->m_canceled = true;
     }
@@ -2251,10 +2251,10 @@ extern "C" LEAN_EXPORT object * lean_dbg_stack_trace(obj_arg fn) {
 // Module initialization
 
 static std::vector<lean_external_class*> * g_ext_classes;
-static mutex                             * g_ext_classes_mutex;
+static recursive_mutex                             * g_ext_classes_mutex;
 
 extern "C" LEAN_EXPORT lean_external_class * lean_register_external_class(lean_external_finalize_proc p1, lean_external_foreach_proc p2) {
-    unique_lock<mutex> lock(*g_ext_classes_mutex);
+    unique_lock<recursive_mutex> lock(*g_ext_classes_mutex);
     external_object_class * cls = new external_object_class{p1, p2};
     g_ext_classes->push_back(cls);
     return cls;
@@ -2262,7 +2262,7 @@ extern "C" LEAN_EXPORT lean_external_class * lean_register_external_class(lean_e
 
 void initialize_object() {
     g_ext_classes       = new std::vector<external_object_class*>();
-    g_ext_classes_mutex = new mutex();
+    g_ext_classes_mutex = new recursive_mutex();
     g_array_empty       = lean_alloc_array(0, 0);
     mark_persistent(g_array_empty);
 }

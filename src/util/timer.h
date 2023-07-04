@@ -16,8 +16,8 @@ public:
     using callback = std::function<void()>;
 
 private:
-    mutex m_mutex;
-    condition_variable m_timer_changed;
+    recursive_mutex m_mutex;
+    condition_variable_any m_timer_changed;
     bool m_shutting_down;
 
     optional<chrono::steady_clock::time_point> m_time;
